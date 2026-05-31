@@ -6,6 +6,13 @@ rw_units.json
 report.txt
 agent_err.txt
 rw_units_fixed.json
+rw_llm.json
+rw_history.json
+rw_terrain_for_ai.json
+
+# Build artifacts
+rw-live-final.jar
+build/rw-live-*.jar
 
 # Python
 __pycache__/

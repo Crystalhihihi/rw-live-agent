@@ -8,7 +8,8 @@
 ├── src/                    # Java Agent 源码
 │   └── RWLiveFinal.java
 ├── scripts/                # Python 工具
-│   ├── llm_interface.py    # 战报生成器
+│   ├── llm_interface.py    # 战报生成器（文本 + JSON）
+│   ├── battle_analyzer.py  # 战略分析器（拓扑/兵力/经济）
 │   ├── translate_units.py  # 单位名称提取工具
 │   └── read_state.py       # 状态读取脚本
 ├── data/                   # 数据文件
@@ -66,11 +67,20 @@ jvm64\bin\java -javaagent:d:\tiexiuzhanz\rw-live-final.jar -Xmx1000M -Dfile.enco
 python scripts/llm_interface.py
 ```
 
-读取 `rw_units.json`，输出中文战报到控制台，同时可写入 `report.txt`。
+同时生成两份输出：
+- **`rw_llm.json`** — LLM 友好的结构化战略数据（拓扑、兵力、经济）
+- **`report.txt`** — 人类可读的中文文本战报
 
-## JSON 数据格式
+也可以单独运行战略分析器：
+```bash
+python scripts/battle_analyzer.py
+```
 
-Agent 每 2 秒写入 `rw_units.json`：
+## 数据格式
+
+### `rw_units.json` — 原始战场数据
+
+Agent 每 2 秒写入：
 
 ```json
 {
@@ -148,12 +158,11 @@ Agent 每 2 秒写入 `rw_units.json`：
 
 ### 地形图例
 
-Agent 将地形压缩为字符网格：
-- `.` 陆地（可通行）
-- `~` 水域
-- `^` 悬崖/不可通行
-- `*` 资源池
-- `@` 大型障碍物
+Agent v11+ 从 `PathCostMap` 读取实际通行数据，地形掩码简化为：
+- `.` 可通行（陆地/桥面）
+- `X` 不可通行（水域/岩浆/悬崖）
+
+> 注：`MapTile.isWater`/`isLava` 等属性在 PC 版中可能为空，但 `PathCostMap.d[]` 是游戏寻路系统实际使用的数据，永远准确。
 
 ## 技术要点
 

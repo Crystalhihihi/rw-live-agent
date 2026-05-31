@@ -215,4 +215,14 @@ def generate_report(json_path=None):
 
 
 if __name__ == '__main__':
-    print(generate_report())
+    # 1. 生成 LLM 友好的 JSON 战报
+    import battle_analyzer
+    battle_analyzer.main()
+
+    # 2. 生成人类可读的文本战报
+    report = generate_report()
+    report_path = os.path.join(PROJECT_ROOT, "report.txt")
+    with open(report_path, 'w', encoding='utf-8') as f:
+        f.write(report)
+    print(f"Report written to {report_path}")
+    print(report)

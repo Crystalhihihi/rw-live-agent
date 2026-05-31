@@ -81,20 +81,24 @@ public class RWLiveFinal {
             Field tileSizeXField = tileMapClass.getDeclaredField("n"); tileSizeXField.setAccessible(true);
             Field tileSizeYField = tileMapClass.getDeclaredField("o"); tileSizeYField.setAccessible(true);
             Field groundLayerField = tileMapClass.getDeclaredField("u"); groundLayerField.setAccessible(true);
+            Field pathingLayerField = tileMapClass.getDeclaredField("y"); pathingLayerField.setAccessible(true);
             Field unitObjectsField = tileMapClass.getDeclaredField("A"); unitObjectsField.setAccessible(true);
             Field uniqueTilesField = tileMapClass.getDeclaredField("B"); uniqueTilesField.setAccessible(true);
 
             Class<?> mapLayerClass = Class.forName("com.corrodinggames.rts.game.b.e");
             Field layerWField = mapLayerClass.getDeclaredField("n"); layerWField.setAccessible(true);
             Field layerHField = mapLayerClass.getDeclaredField("o"); layerHField.setAccessible(true);
-            Field tileIdsField = mapLayerClass.getDeclaredField("q"); tileIdsField.setAccessible(true);
+            Method getTileIdsMethod = mapLayerClass.getDeclaredMethod("a");
+            getTileIdsMethod.setAccessible(true);
 
-            Class<?> mapTileClass = Class.forName("com.corrodinggames.rts.game.b.g");
-            Field isWaterField = mapTileClass.getDeclaredField("e"); isWaterField.setAccessible(true);
-            Field isCliffField = mapTileClass.getDeclaredField("h"); isCliffField.setAccessible(true);
-            Field isResourceField = mapTileClass.getDeclaredField("i"); isResourceField.setAccessible(true);
-            Field blockLevelField = mapTileClass.getDeclaredField("j"); blockLevelField.setAccessible(true);
-            Field hasLargeObjField = mapTileClass.getDeclaredField("k"); hasLargeObjField.setAccessible(true);
+            Class<?> pathEngineClass = Class.forName("com.corrodinggames.rts.gameFramework.k.l");
+            Field pathEngineField = engineClass.getDeclaredField("bU"); pathEngineField.setAccessible(true);
+
+            Class<?> pathCostMapClass = Class.forName("com.corrodinggames.rts.gameFramework.k.i");
+            Field landCostMapField = pathEngineClass.getDeclaredField("y"); landCostMapField.setAccessible(true);
+            Field costMapWField = pathCostMapClass.getDeclaredField("b"); costMapWField.setAccessible(true);
+            Field costMapHField = pathCostMapClass.getDeclaredField("c"); costMapHField.setAccessible(true);
+            Field terrainCostField = pathCostMapClass.getDeclaredField("d"); terrainCostField.setAccessible(true);
 
             while (running) {
                 export(list, sizeMethod, getMethod,
@@ -103,9 +107,9 @@ public class RWLiveFinal {
                        colorIdField, nameField, aiLevelField, aiBaseLevelField,
                        isAIField, isDefeatedField, isActiveField, commandCenterField,
                        tileMap, tileCountXField, tileCountYField, tileSizeXField, tileSizeYField,
-                       groundLayerField, unitObjectsField, uniqueTilesField,
-                       layerWField, layerHField, tileIdsField,
-                       isWaterField, isCliffField, isResourceField, blockLevelField, hasLargeObjField);
+                       groundLayerField, pathingLayerField, unitObjectsField, uniqueTilesField,
+                       layerWField, layerHField, getTileIdsMethod,
+                       engine, pathEngineField, landCostMapField, costMapWField, costMapHField, terrainCostField);
                 Thread.sleep(2000);
             }
         } catch (Exception e) {
@@ -123,10 +127,9 @@ public class RWLiveFinal {
                                Field commandCenterField,
                                Object tileMap, Field tileCountXField, Field tileCountYField,
                                Field tileSizeXField, Field tileSizeYField,
-                               Field groundLayerField, Field unitObjectsField, Field uniqueTilesField,
-                               Field layerWField, Field layerHField, Field tileIdsField,
-                               Field isWaterField, Field isCliffField, Field isResourceField,
-                               Field blockLevelField, Field hasLargeObjField) {
+                               Field groundLayerField, Field pathingLayerField, Field unitObjectsField, Field uniqueTilesField,
+                               Field layerWField, Field layerHField, Method getTileIdsMethod,
+                               Object engine, Field pathEngineField, Field landCostMapField, Field costMapWField, Field costMapHField, Field terrainCostField) {
         StringBuilder json = new StringBuilder();
         json.append("{\n  \"timestamp\": ").append(System.currentTimeMillis()).append(",\n");
 
@@ -158,8 +161,9 @@ public class RWLiveFinal {
                     int rc = 0;
                     for (Object p : pts) {
                         if (p == null) continue;
-                        int px = p.getClass().getField("x").getInt(p);
-                        int py = p.getClass().getField("y").getInt(p);
+                        // PC obfuscation: Point.x -> a, Point.y -> b
+                        int px = p.getClass().getField("a").getInt(p);
+                        int py = p.getClass().getField("b").getInt(p);
                         if (rc > 0) json.append(",\n");
                         json.append(String.format("    {\"x\":%d,\"y\":%d}", px, py));
                         rc++;
@@ -171,24 +175,22 @@ public class RWLiveFinal {
         }
         json.append("\n  ],\n");
 
-        // Terrain mask
+        // Terrain mask from pathfinding grid (actual passability data)
         json.append("  \"terrain\": ");
         try {
-            if (tileMap != null) {
-                Object groundLayer = groundLayerField.get(tileMap);
-                Object uniqueTiles = uniqueTilesField.get(tileMap);
-                if (groundLayer != null && uniqueTiles instanceof Object[]) {
-                    int layerW = layerWField.getInt(groundLayer);
-                    int layerH = layerHField.getInt(groundLayer);
-                    short[] tileIds = (short[]) tileIdsField.get(groundLayer);
-                    Object[] tileLookup = (Object[]) uniqueTiles;
+            Object pathEngine = pathEngineField.get(engine);
+            if (pathEngine != null) {
+                Object landCostMap = landCostMapField.get(pathEngine);
+                if (landCostMap != null) {
+                    int costW = costMapWField.getInt(landCostMap);
+                    int costH = costMapHField.getInt(landCostMap);
+                    byte[] terrainCost = (byte[]) terrainCostField.get(landCostMap);
 
-                    // Downsample to ~50x50 max
                     int target = 50;
-                    int stepX = Math.max(1, layerW / target);
-                    int stepY = Math.max(1, layerH / target);
-                    int outW = layerW / stepX;
-                    int outH = layerH / stepY;
+                    int stepX = Math.max(1, costW / target);
+                    int stepY = Math.max(1, costH / target);
+                    int outW = costW / stepX;
+                    int outH = costH / stepY;
 
                     StringBuilder mask = new StringBuilder();
                     mask.append(String.format("{\"width\":%d,\"height\":%d,\"step\":%d,\"mask\":[", outW, outH, Math.max(stepX, stepY)));
@@ -198,25 +200,17 @@ public class RWLiveFinal {
                         for (int ox = 0; ox < outW; ox++) {
                             int sx = ox * stepX;
                             int sy = oy * stepY;
-                            int ex = Math.min(sx + stepX, layerW);
-                            int ey = Math.min(sy + stepY, layerH);
+                            int ex = Math.min(sx + stepX, costW);
+                            int ey = Math.min(sy + stepY, costH);
 
-                            char ch = '.'; // default land
-                            // Priority: cliff > water > resource > obstacle > land
+                            char ch = '.'; // passable
                             outer:
                             for (int ty = sy; ty < ey; ty++) {
                                 for (int tx = sx; tx < ex; tx++) {
-                                    int idx = tx * layerH + ty;
-                                    if (idx < 0 || idx >= tileIds.length) continue;
-                                    short tid = tileIds[idx];
-                                    if (tid < 0 || tid >= tileLookup.length) continue;
-                                    Object mt = tileLookup[tid];
-                                    if (mt == null) continue;
-
-                                    if (isCliffField.getBoolean(mt)) { ch = '^'; break outer; }
-                                    if (isWaterField.getBoolean(mt)) { ch = '~'; }
-                                    else if (isResourceField.getBoolean(mt) && ch == '.') { ch = '*'; }
-                                    else if ((hasLargeObjField.getBoolean(mt) || blockLevelField.getByte(mt) > 0) && ch == '.') { ch = '@'; }
+                                    int idx = tx * costH + ty;
+                                    if (terrainCost == null || idx < 0 || idx >= terrainCost.length) continue;
+                                    byte cost = terrainCost[idx];
+                                    if (cost == -1) { ch = 'X'; break outer; } // impassable
                                 }
                             }
                             mask.append(ch);
@@ -236,6 +230,56 @@ public class RWLiveFinal {
         }
         json.append(",\n");
 
+        // ---- Units ----
+        int[] teamUnitCounts = new int[16];
+        StringBuilder unitsJson = new StringBuilder();
+        unitsJson.append("  \"units\": [\n");
+        try {
+            int size = (int) sizeMethod.invoke(list);
+            int count = 0;
+            for (int i = 0; i < size; i++) {
+                Object unit = getMethod.invoke(list, i);
+                if (unit == null) continue;
+                int team = dnField.getInt(unit);
+                if (team < 0) continue;
+                if (team < teamUnitCounts.length) teamUnitCounts[team]++;
+
+                int typeId = dmField.getInt(unit);
+                float hp = cuField.getFloat(unit);
+                float maxHp = cvField.getFloat(unit);
+                float x = eoField.getFloat(unit);
+                float y = epField.getFloat(unit);
+                String typeName = unit.getClass().getSimpleName();
+
+                String enumName = "";
+                String displayName = "";
+                try {
+                    Object def = rMethod.invoke(unit);
+                    if (def != null) {
+                        Method nameMethod = def.getClass().getMethod("name");
+                        enumName = (String) nameMethod.invoke(def);
+                        Method eMethod = def.getClass().getDeclaredMethod("e");
+                        eMethod.setAccessible(true);
+                        displayName = (String) eMethod.invoke(def);
+                    }
+                } catch (Exception ex) {}
+                if (enumName == null) enumName = "";
+                if (displayName == null) displayName = "";
+
+                enumName = safeStr(enumName);
+                displayName = safeStr(displayName);
+
+                if (count > 0) unitsJson.append(",\n");
+                unitsJson.append(String.format(
+                    "    {\"i\":%d,\"team\":%d,\"type\":\"%s\",\"typeId\":%d,\"enum\":\"%s\",\"name\":\"%s\",\"x\":%.1f,\"y\":%.1f,\"hp\":%.1f,\"maxHp\":%.1f}",
+                    i, team, typeName, typeId, enumName, displayName, x, y, hp, maxHp));
+                count++;
+            }
+        } catch (Exception e) {
+            unitsJson.append("    {\"error\":\"").append(safeStr(e.getMessage())).append("\"}");
+        }
+        unitsJson.append("\n  ]\n}\n");
+
         // ---- Teams ----
         json.append("  \"teams\": [\n");
         try {
@@ -249,7 +293,7 @@ public class RWLiveFinal {
                     int tid = teamIdField.getInt(team);
                     double credits = creditsField.getDouble(team);
                     double energy = energyField.getDouble(team);
-                    int ucount = unitCountField.getInt(team);
+                    int ucount = (tid >= 0 && tid < teamUnitCounts.length) ? teamUnitCounts[tid] : 0;
                     int colorId = colorIdField.getInt(team);
                     String tname = (String) nameField.get(team);
                     int aiLvl = aiLevelField.getInt(team);
@@ -279,52 +323,7 @@ public class RWLiveFinal {
         }
         json.append("\n  ],\n");
 
-        // ---- Units ----
-        json.append("  \"units\": [\n");
-        try {
-            int size = (int) sizeMethod.invoke(list);
-            int count = 0;
-            for (int i = 0; i < size; i++) {
-                Object unit = getMethod.invoke(list, i);
-                if (unit == null) continue;
-                int team = dnField.getInt(unit);
-                if (team < 0) continue;
-
-                int typeId = dmField.getInt(unit);
-                float hp = cuField.getFloat(unit);
-                float maxHp = cvField.getFloat(unit);
-                float x = eoField.getFloat(unit);
-                float y = epField.getFloat(unit);
-                String typeName = unit.getClass().getSimpleName();
-
-                String enumName = "";
-                String displayName = "";
-                try {
-                    Object def = rMethod.invoke(unit);
-                    if (def != null) {
-                        Method nameMethod = def.getClass().getMethod("name");
-                        enumName = (String) nameMethod.invoke(def);
-                        Method eMethod = def.getClass().getDeclaredMethod("e");
-                        eMethod.setAccessible(true);
-                        displayName = (String) eMethod.invoke(def);
-                    }
-                } catch (Exception ex) {}
-                if (enumName == null) enumName = "";
-                if (displayName == null) displayName = "";
-
-                enumName = safeStr(enumName);
-                displayName = safeStr(displayName);
-
-                if (count > 0) json.append(",\n");
-                json.append(String.format(
-                    "    {\"i\":%d,\"team\":%d,\"type\":\"%s\",\"typeId\":%d,\"enum\":\"%s\",\"name\":\"%s\",\"x\":%.1f,\"y\":%.1f,\"hp\":%.1f,\"maxHp\":%.1f}",
-                    i, team, typeName, typeId, enumName, displayName, x, y, hp, maxHp));
-                count++;
-            }
-        } catch (Exception e) {
-            json.append("    {\"error\":\"").append(safeStr(e.getMessage())).append("\"}");
-        }
-        json.append("\n  ]\n}\n");
+        json.append(unitsJson);
 
         try (FileWriter fw = new FileWriter(JSON_FILE, false)) { fw.write(json.toString()); }
         catch (IOException e) {}
