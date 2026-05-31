@@ -1,6 +1,7 @@
 import java.lang.instrument.*;
 import java.lang.reflect.*;
 import java.io.*;
+import java.util.List;
 
 public class RWLiveFinal {
     private static final String JSON_FILE = "d:/tiexiuzhanz/rw_units.json";
@@ -49,7 +50,7 @@ public class RWLiveFinal {
 
             // ---- Team reflection setup ----
             Class<?> nClass = Class.forName("com.corrodinggames.rts.game.n");
-            Field teamsField = nClass.getDeclaredField("b"); // teamInstances
+            Field teamsField = nClass.getDeclaredField("b");
             teamsField.setAccessible(true);
 
             Field teamIdField = nClass.getDeclaredField("k"); teamIdField.setAccessible(true);
@@ -65,12 +66,46 @@ public class RWLiveFinal {
             Field isActiveField = nClass.getDeclaredField("m"); isActiveField.setAccessible(true);
             Field commandCenterField = nClass.getDeclaredField("s"); commandCenterField.setAccessible(true);
 
+            // ---- Map reflection setup ----
+            Class<?> engineClass = Class.forName("com.corrodinggames.rts.gameFramework.l");
+            Method getEngineMethod = engineClass.getDeclaredMethod("B");
+            getEngineMethod.setAccessible(true);
+            Object engine = getEngineMethod.invoke(null);
+
+            Field tileMapField = engineClass.getDeclaredField("bL"); tileMapField.setAccessible(true);
+            Object tileMap = tileMapField.get(engine);
+
+            Class<?> tileMapClass = Class.forName("com.corrodinggames.rts.game.b.b");
+            Field tileCountXField = tileMapClass.getDeclaredField("C"); tileCountXField.setAccessible(true);
+            Field tileCountYField = tileMapClass.getDeclaredField("D"); tileCountYField.setAccessible(true);
+            Field tileSizeXField = tileMapClass.getDeclaredField("n"); tileSizeXField.setAccessible(true);
+            Field tileSizeYField = tileMapClass.getDeclaredField("o"); tileSizeYField.setAccessible(true);
+            Field groundLayerField = tileMapClass.getDeclaredField("u"); groundLayerField.setAccessible(true);
+            Field unitObjectsField = tileMapClass.getDeclaredField("A"); unitObjectsField.setAccessible(true);
+            Field uniqueTilesField = tileMapClass.getDeclaredField("B"); uniqueTilesField.setAccessible(true);
+
+            Class<?> mapLayerClass = Class.forName("com.corrodinggames.rts.game.b.e");
+            Field layerWField = mapLayerClass.getDeclaredField("n"); layerWField.setAccessible(true);
+            Field layerHField = mapLayerClass.getDeclaredField("o"); layerHField.setAccessible(true);
+            Field tileIdsField = mapLayerClass.getDeclaredField("q"); tileIdsField.setAccessible(true);
+
+            Class<?> mapTileClass = Class.forName("com.corrodinggames.rts.game.b.g");
+            Field isWaterField = mapTileClass.getDeclaredField("e"); isWaterField.setAccessible(true);
+            Field isCliffField = mapTileClass.getDeclaredField("h"); isCliffField.setAccessible(true);
+            Field isResourceField = mapTileClass.getDeclaredField("i"); isResourceField.setAccessible(true);
+            Field blockLevelField = mapTileClass.getDeclaredField("j"); blockLevelField.setAccessible(true);
+            Field hasLargeObjField = mapTileClass.getDeclaredField("k"); hasLargeObjField.setAccessible(true);
+
             while (running) {
                 export(list, sizeMethod, getMethod,
                        dnField, dmField, cuField, cvField, eoField, epField, rMethod,
                        teamsField, teamIdField, creditsField, energyField, unitCountField,
                        colorIdField, nameField, aiLevelField, aiBaseLevelField,
-                       isAIField, isDefeatedField, isActiveField, commandCenterField);
+                       isAIField, isDefeatedField, isActiveField, commandCenterField,
+                       tileMap, tileCountXField, tileCountYField, tileSizeXField, tileSizeYField,
+                       groundLayerField, unitObjectsField, uniqueTilesField,
+                       layerWField, layerHField, tileIdsField,
+                       isWaterField, isCliffField, isResourceField, blockLevelField, hasLargeObjField);
                 Thread.sleep(2000);
             }
         } catch (Exception e) {
@@ -85,9 +120,121 @@ public class RWLiveFinal {
                                Field energyField, Field unitCountField, Field colorIdField,
                                Field nameField, Field aiLevelField, Field aiBaseLevelField,
                                Field isAIField, Field isDefeatedField, Field isActiveField,
-                               Field commandCenterField) {
+                               Field commandCenterField,
+                               Object tileMap, Field tileCountXField, Field tileCountYField,
+                               Field tileSizeXField, Field tileSizeYField,
+                               Field groundLayerField, Field unitObjectsField, Field uniqueTilesField,
+                               Field layerWField, Field layerHField, Field tileIdsField,
+                               Field isWaterField, Field isCliffField, Field isResourceField,
+                               Field blockLevelField, Field hasLargeObjField) {
         StringBuilder json = new StringBuilder();
         json.append("{\n  \"timestamp\": ").append(System.currentTimeMillis()).append(",\n");
+
+        // ---- Map metadata + resources + terrain ----
+        int mapW = 0, mapH = 0, tileSize = 20;
+        try {
+            if (tileMap != null) {
+                mapW = tileCountXField.getInt(tileMap);
+                mapH = tileCountYField.getInt(tileMap);
+                tileSize = tileSizeXField.getInt(tileMap);
+                int worldW = mapW * tileSize;
+                int worldH = mapH * tileSize;
+                json.append(String.format("  \"map\":{\"widthTiles\":%d,\"heightTiles\":%d,\"tileSize\":%d,\"worldWidth\":%d,\"worldHeight\":%d},\n",
+                    mapW, mapH, tileSize, worldW, worldH));
+            } else {
+                json.append("  \"map\":null,\n");
+            }
+        } catch (Exception e) {
+            json.append("  \"map\":{\"error\":\"").append(safeStr(e.getMessage())).append("\"},\n");
+        }
+
+        // Resources
+        json.append("  \"resources\": [\n");
+        try {
+            if (tileMap != null) {
+                Object unitObjects = unitObjectsField.get(tileMap);
+                if (unitObjects instanceof List) {
+                    List<?> pts = (List<?>) unitObjects;
+                    int rc = 0;
+                    for (Object p : pts) {
+                        if (p == null) continue;
+                        int px = p.getClass().getField("x").getInt(p);
+                        int py = p.getClass().getField("y").getInt(p);
+                        if (rc > 0) json.append(",\n");
+                        json.append(String.format("    {\"x\":%d,\"y\":%d}", px, py));
+                        rc++;
+                    }
+                }
+            }
+        } catch (Exception e) {
+            json.append("    {\"error\":\"").append(safeStr(e.getMessage())).append("\"}");
+        }
+        json.append("\n  ],\n");
+
+        // Terrain mask
+        json.append("  \"terrain\": ");
+        try {
+            if (tileMap != null) {
+                Object groundLayer = groundLayerField.get(tileMap);
+                Object uniqueTiles = uniqueTilesField.get(tileMap);
+                if (groundLayer != null && uniqueTiles instanceof Object[]) {
+                    int layerW = layerWField.getInt(groundLayer);
+                    int layerH = layerHField.getInt(groundLayer);
+                    short[] tileIds = (short[]) tileIdsField.get(groundLayer);
+                    Object[] tileLookup = (Object[]) uniqueTiles;
+
+                    // Downsample to ~50x50 max
+                    int target = 50;
+                    int stepX = Math.max(1, layerW / target);
+                    int stepY = Math.max(1, layerH / target);
+                    int outW = layerW / stepX;
+                    int outH = layerH / stepY;
+
+                    StringBuilder mask = new StringBuilder();
+                    mask.append(String.format("{\"width\":%d,\"height\":%d,\"step\":%d,\"mask\":[", outW, outH, Math.max(stepX, stepY)));
+                    for (int oy = 0; oy < outH; oy++) {
+                        if (oy > 0) mask.append(",");
+                        mask.append("\"");
+                        for (int ox = 0; ox < outW; ox++) {
+                            int sx = ox * stepX;
+                            int sy = oy * stepY;
+                            int ex = Math.min(sx + stepX, layerW);
+                            int ey = Math.min(sy + stepY, layerH);
+
+                            char ch = '.'; // default land
+                            // Priority: cliff > water > resource > obstacle > land
+                            outer:
+                            for (int ty = sy; ty < ey; ty++) {
+                                for (int tx = sx; tx < ex; tx++) {
+                                    int idx = tx * layerH + ty;
+                                    if (idx < 0 || idx >= tileIds.length) continue;
+                                    short tid = tileIds[idx];
+                                    if (tid < 0 || tid >= tileLookup.length) continue;
+                                    Object mt = tileLookup[tid];
+                                    if (mt == null) continue;
+
+                                    if (isCliffField.getBoolean(mt)) { ch = '^'; break outer; }
+                                    if (isWaterField.getBoolean(mt)) { ch = '~'; }
+                                    else if (isResourceField.getBoolean(mt) && ch == '.') { ch = '*'; }
+                                    else if ((hasLargeObjField.getBoolean(mt) || blockLevelField.getByte(mt) > 0) && ch == '.') { ch = '@'; }
+                                }
+                            }
+                            mask.append(ch);
+                        }
+                        mask.append("\"");
+                    }
+                    mask.append("]}");
+                    json.append(mask.toString());
+                } else {
+                    json.append("null");
+                }
+            } else {
+                json.append("null");
+            }
+        } catch (Exception e) {
+            json.append("{\"error\":\"").append(safeStr(e.getMessage())).append("\"}");
+        }
+        json.append(",\n");
 
         // ---- Teams ----
         json.append("  \"teams\": [\n");
@@ -110,7 +257,6 @@ public class RWLiveFinal {
                     boolean isAI = isAIField.getBoolean(team);
                     boolean isDefeated = isDefeatedField.getBoolean(team);
 
-                    // Base position from command center
                     double baseX = -1, baseY = -1;
                     Object cc = commandCenterField.get(team);
                     if (cc != null) {

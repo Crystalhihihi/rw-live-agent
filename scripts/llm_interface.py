@@ -8,13 +8,14 @@ import json
 import sys
 from collections import defaultdict
 import os
+import math
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 DATA_DIR = os.path.join(PROJECT_ROOT, "data")
 
-UNIT_NAMES = {}  # enum -> Chinese name
-TYPE_HP_MAP = {}  # typeLetter_hp -> Chinese name
+UNIT_NAMES = {}
+TYPE_HP_MAP = {}
 
 # 1. Load manual mapping (sandbox-tested entries with HP info)
 try:
@@ -36,7 +37,7 @@ try:
 except Exception as e:
     print(f"Warning: could not load unit_mapping.txt: {e}", file=sys.stderr)
 
-# 2. Load locale names as fallback (auto-extracted from Strings_zh_cn.properties)
+# 2. Load locale names as fallback
 try:
     locale_path = os.path.join(DATA_DIR, "locale_names.txt")
     with open(locale_path, 'r', encoding='utf-8') as f:
@@ -74,6 +75,22 @@ def get_unit_name(u):
     return f"未知({type_letter})"
 
 
+def quadrant_name(x, y, map_w, map_h):
+    """Return rough directional quadrant for a point on the map."""
+    if map_w <= 0 or map_h <= 0:
+        return "未知区域"
+    hx, hy = map_w / 2, map_h / 2
+    ns = "北" if y < hy else "南"
+    ew = "东" if x > hx else "西"
+    if abs(x - hx) < hx * 0.3 and abs(y - hy) < hy * 0.3:
+        return "中央区域"
+    if abs(x - hx) < hx * 0.3:
+        return ns + "部"
+    if abs(y - hy) < hy * 0.3:
+        return ew + "部"
+    return ns + ew
+
+
 def generate_report(json_path=None):
     if json_path is None:
         json_path = os.path.join(PROJECT_ROOT, "rw_units.json")
@@ -82,24 +99,50 @@ def generate_report(json_path=None):
         data = json.load(f)
 
     timestamp = data.get('timestamp', 0)
+    map_info = data.get('map', {})
+    resources = data.get('resources', [])
+    terrain = data.get('terrain', {})
     teams_info = {t['teamId']: t for t in data.get('teams', [])}
     units = data.get('units', [])
 
-    # Filter valid units (team >= 0, not editor cursor)
-    valid_units = [u for u in units if u.get('team', -1) >= 0 and u.get('type') != 'h']
+    map_w = map_info.get('worldWidth', 0)
+    map_h = map_info.get('worldHeight', 0)
+    tile_size = map_info.get('tileSize', 20)
 
-    # Group by team
+    valid_units = [u for u in units if u.get('team', -1) >= 0 and u.get('type') != 'h']
     team_units = defaultdict(list)
     for u in valid_units:
         team_units[u['team']].append(u)
 
     report = []
     report.append(f"## 铁锈战争实时战报 (Tick: {timestamp})")
-    report.append(f"地图单位总数: {len(valid_units)}")
+
+    # Map overview
+    if map_info:
+        w_t = map_info.get('widthTiles', 0)
+        h_t = map_info.get('heightTiles', 0)
+        report.append(f"地图尺寸: {w_t}x{h_t} 格 ({map_w}x{map_h} 像素)")
+    if resources:
+        report.append(f"资源点总数: {len(resources)}")
+        # Resource distribution by quadrant
+        res_quads = defaultdict(int)
+        for r in resources:
+            q = quadrant_name(r['x'] * tile_size, r['y'] * tile_size, map_w, map_h)
+            res_quads[q] += 1
+        quad_str = ", ".join([f"{q}:{c}" for q, c in sorted(res_quads.items())])
+        report.append(f"资源分布: {quad_str}")
+    if terrain and 'mask' in terrain:
+        mask = terrain['mask']
+        water_cells = sum(row.count('~') for row in mask)
+        cliff_cells = sum(row.count('^') for row in mask)
+        resource_cells = sum(row.count('*') for row in mask)
+        total_cells = len(mask) * len(mask[0]) if mask else 1
+        report.append(f"地形概览: 水域{water_cells}/{total_cells} 悬崖{cliff_cells}/{total_cells} 资源{resource_cells}/{total_cells}")
     report.append("")
 
-    # Team overview
+    # Team overview with resource control
     report.append("### 队伍概况")
+    extractor_enum = 'extractor'
     for tid in sorted(teams_info.keys()):
         t = teams_info[tid]
         name = t.get('name', f'队伍{tid}')
@@ -113,7 +156,23 @@ def generate_report(json_path=None):
         base_x = t.get('baseX', -1)
         base_y = t.get('baseY', -1)
         base_str = f"基地({base_x:.0f}, {base_y:.0f})" if base_x >= 0 else "基地(已摧毁)"
+
+        # Count extractors for this team
+        extractors = [u for u in team_units.get(tid, []) if u.get('enum') == extractor_enum]
+        res_controlled = 0
+        for ex in extractors:
+            ex_x = ex.get('x', 0)
+            ex_y = ex.get('y', 0)
+            # Check if near any resource point (within 2 tiles = 40px)
+            for r in resources:
+                rx = r['x'] * tile_size
+                ry = r['y'] * tile_size
+                if math.hypot(ex_x - rx, ex_y - ry) < 60:
+                    res_controlled += 1
+                    break
+
         report.append(f"- 队伍{tid} {name} {ai_tag}{defeated_tag}: 资金={credits:.0f} 能量={energy:.0f} 单位数={ucount} AI等级={ai_lvl} 基地等级={ai_base} {base_str}")
+        report.append(f"  采集器{len(extractors)}个, 控制资源点{res_controlled}处")
     report.append("")
 
     # Unit details per team
@@ -140,6 +199,16 @@ def generate_report(json_path=None):
         xs = [u['x'] for u in team_list]
         ys = [u['y'] for u in team_list]
         report.append(f"  活动区域: X({min(xs):.0f}~{max(xs):.0f}), Y({min(ys):.0f}~{max(ys):.0f})")
+        report.append("")
+
+    # Terrain ASCII preview
+    if terrain and 'mask' in terrain:
+        report.append("### 地形简图")
+        report.append("```")
+        report.append("图例: .陆地 ~水域 ^悬崖 *资源 @障碍")
+        report.append("```")
+        for row in terrain['mask']:
+            report.append(f"    {row}")
         report.append("")
 
     return '\n'.join(report)

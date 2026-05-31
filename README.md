@@ -75,6 +75,27 @@ Agent 每 2 秒写入 `rw_units.json`：
 ```json
 {
   "timestamp": 1717132800000,
+  "map": {
+    "widthTiles": 200,
+    "heightTiles": 150,
+    "tileSize": 20,
+    "worldWidth": 4000,
+    "worldHeight": 3000
+  },
+  "resources": [
+    {"x": 50, "y": 40},
+    {"x": 120, "y": 80}
+  ],
+  "terrain": {
+    "width": 50,
+    "height": 38,
+    "step": 4,
+    "mask": [
+      "..........................",
+      "....~~~~~~................",
+      "....~~~~~~................"
+    ]
+  },
   "teams": [
     {
       "teamId": 1,
@@ -112,6 +133,11 @@ Agent 每 2 秒写入 `rw_units.json`：
 
 | 字段 | 说明 |
 |------|------|
+| `map.widthTiles/heightTiles` | 地图格数 |
+| `map.tileSize` | 每格像素尺寸（默认 20） |
+| `resources[].x/y` | 资源池格坐标 |
+| `terrain.mask` | 字符地形简图（下采样至 ~50x50） |
+| `terrain.step` | 下采样步长（每 N 格取 1 点） |
 | `teams[].credits` | 队伍资金 |
 | `teams[].energy` | 队伍能量/电力 |
 | `teams[].unitCount` | 队伍单位总数 |
@@ -119,6 +145,15 @@ Agent 每 2 秒写入 `rw_units.json`：
 | `teams[].baseX/baseY` | 指挥中心坐标（被摧毁时为 -1） |
 | `units[].enum` | `UnitTypeEnum.name()`，如 `"tank"`、`"gunShip"` |
 | `units[].name` | 游戏内本地化名称（可能为空） |
+
+### 地形图例
+
+Agent 将地形压缩为字符网格：
+- `.` 陆地（可通行）
+- `~` 水域
+- `^` 悬崖/不可通行
+- `*` 资源池
+- `@` 大型障碍物
 
 ## 技术要点
 
