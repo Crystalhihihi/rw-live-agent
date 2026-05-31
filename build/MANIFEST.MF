@@ -1,0 +1,4 @@
+Premain-Class: RWLiveFinal
+Agent-Class: RWLiveFinal
+Can-Redefine-Classes: true
+Can-Retransform-Classes: true

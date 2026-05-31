@@ -1,0 +1,25 @@
+# Java
+*.class
+
+# Runtime generated files
+rw_units.json
+report.txt
+agent_err.txt
+rw_units_fixed.json
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Large third-party source (optional: use git submodule instead)
+rw-source/
+
+# IDE
+.vscode/
+.idea/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db

@@ -1,0 +1,49 @@
+# Rusted Warfare 单位映射表（实时记录 + locale 自动回退）
+# 格式: 中文名 | 类名(type) | typeId | HP | maxHp | enum (英文枚举名)
+# 注：enum 为空时依赖 llm_interface.py 的 locale_names.txt 回退
+
+轻型武装直升机 | j |  7 |  50 |  50 | lightGunship
+机枪艇         | c | 19 | 170 | 170 | gunBoat
+坦克           | j | 24 | 210 | 210 | tank
+悬浮坦克       | g | 25 | 150 | 150 | hoverTank
+水下探测器     | j | 20 |  80 |  80 | lightSub
+建造者         | b | 26 | 170 | 170 | builder
+海上建造者     | b |  9 | 500 | 500 | builderShip
+武装直升机     | e |  7 | 260 | 260 | gunShip
+指挥中心       | b |    |     |     | commandCenter
+陆军工厂       | b |    |     |     | landFactory
+空军基地       | b |    |     |     | airFactory
+海军基地       | b |    |     |     | seaFactory
+资源抽取器     | b |    |     |     | extractor
+炮塔           | b |    |     |     | turret
+防空炮塔       | b |    |     |     | antiAirTurret
+直升机         | e |    |     |     | helicopter
+拦截机         | e |    |     |     | airShip
+自行火炮       | j |    |     |     | artillery
+导弹舰         | c |    |     |     | missileShip
+超级坦克       | j |    |     |     | megaTank
+激光坦克       | j |    |     |     | laserTank
+登陆艇         | c |    |     |     | hovercraft
+战列舰         | c |    |     |     | battleShip
+坦克杀手       | j |    |     |     | tankDestroyer
+重型坦克       | j |    |     |     | heavyTank
+重型气垫坦克   | j |    |     |     | heavyHoverTank
+激光防御塔     | b |    |     |     | laserDefence
+运输机         | e |    |     |     | dropship
+修复湾         | b |    |     |     | repairbay
+核弹发射井     | b |    |     |     | NukeLaucher
+反核防御       | b |    |     |     | AntiNukeLaucher
+猛犸坦克       | j |    |     |     | mammothTank
+实验坦克       | j |    |     |     | experimentalTank
+实验工厂       | b |    |     |     | experimentalLandFactory
+水晶           |    |    |     |     | crystalResource
+墙             | b |    |     |     | wall_v
+资源制造仪     | b |    |     |     | fabricator
+供应站         | b |    |     |     | supplyDepot
+潜水艇         | c |    |     |     | attackSubmarine
+两栖喷气机     | e |    |     |     | amphibiousJet
+重型战舰       | c |    |     |     | heavyBattleship
+重型潜艇       | c |    |     |     | heavySub
+轰炸机         | e |    |     |     | bomber
+火炮           | b |    |     |     | turret_artillery
+火焰喷射器     | b |    |     |     | turret_flamethrower
